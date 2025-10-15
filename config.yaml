@@ -1,0 +1,5 @@
+input_data:
+  file1: "../data/raw/synthetic_fraud_dataset.csv"
+
+output_data:
+  file1: "../data/clean/cleaned_data_file.csv"
