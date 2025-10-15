@@ -1,0 +1,46 @@
+.ipynb_checkpoints/
+.venv/
+.env
+notebooks/.ipynb_checkpoints/
+notebooks/.env
+notebooks/.DS_Store
+.DS_Store
+*.in
+data/raw/*.csv
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pkl
+*.joblib
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+
+# Streamlit
+.streamlit/
+
+# VS Code
+.vscode/
+
+# macOS
+.DS_Store
+
+# Environment files
+.env
+*.env
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Logs and temp files
+*.log
+*.tmp
+*.bak
+
+# OS-specific
+Thumbs.db
