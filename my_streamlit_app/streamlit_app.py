@@ -18,7 +18,7 @@ st.set_page_config(page_title="Fraud Model Demo", layout="wide")
 
 # 2. Load pickled models and feature names
 @st.cache(allow_output_mutation=True)
-def load_models_and_features(models_dir="models"):
+def load_models_and_features(models_dir="my_streamlit_app/models"):
     models = {}
     for p in Path(models_dir).glob("*.pkl"):
         name = p.stem
@@ -105,4 +105,5 @@ try:
         st.pyplot(fig_pr)
 
 except Exception as e:
+
     st.warning(f"Evaluation section skipped: {e}")
