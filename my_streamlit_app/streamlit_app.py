@@ -4,8 +4,7 @@ import numpy as np
 import joblib
 from pathlib import Path
 from sklearn.metrics import (
-    accuracy_score, precision_score, recall_score, f1_score,
-    confusion_matrix, roc_curve, precision_recall_curve, roc_auc_score
+    accuracy_score, precision_score, recall_score, f1_score
 )
 import matplotlib.pyplot as plt
 from PIL import Image
@@ -37,8 +36,12 @@ def load_models_and_features(models_dir="models"):
 
 # Sidebar — logo
 with st.sidebar:
-    logo = Image.open("assets/banner.png")
-    st.image(logo, width=250)
+    logo_path = Path("assets/banner.png")
+    if logo_path.exists():
+        logo = Image.open(logo_path)
+        st.image(logo, width=250)
+    else:
+        st.markdown("### Fraud Model Explainer")
 
 # Load models
 models_dict, feature_names = load_models_and_features()
@@ -103,4 +106,3 @@ if df is not None:
     st.write(f"Precision: {precision_score(y_test, y_pred):.2%}")
     st.write(f"Recall: {recall_score(y_test, y_pred):.2%}")
     st.write(f"F1 Score: {f1_score(y_test, y_pred):.2%}")
-
