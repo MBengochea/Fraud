@@ -117,3 +117,5 @@ if df is not None and "is_fraud" in df.columns:
     st.write(f"Precision: {precision_score(y_test, y_pred):.2%}")
     st.write(f"Recall: {recall_score(y_test, y_pred):.2%}")
     st.write(f"F1 Score: {f1_score(y_test, y_pred):.2%}")
+
+
