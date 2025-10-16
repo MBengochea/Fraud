@@ -30,8 +30,16 @@ def load_models_and_features(models_dir="models"):
         name = p.stem
         if name == "feature_names":
             continue
-        models[name] = joblib.load(p)
-    feature_names = joblib.load(Path(models_dir) / "feature_names.pkl")
+        try:
+            models[name] = joblib.load(p)
+        except FileNotFoundError:
+            st.error(f"Model file not found: {p.name}")
+    feature_path = Path(models_dir) / "feature_names.pkl"
+    if feature_path.exists():
+        feature_names = joblib.load(feature_path)
+    else:
+        st.error("Missing feature_names.pkl in models/")
+        feature_names = []
     return models, feature_names
 
 # Sidebar — logo
@@ -45,6 +53,8 @@ with st.sidebar:
 
 # Load models
 models_dict, feature_names = load_models_and_features()
+if not models_dict or not feature_names:
+    st.stop()
 
 # Sidebar — model selector
 st.sidebar.header("Model Selection")
@@ -69,7 +79,8 @@ threshold = st.sidebar.slider("Decision threshold", 0.0, 1.0, 0.5)
 X_user_full = pd.DataFrame(columns=feature_names)
 X_user_full.loc[0] = 0.0
 for feat, val in selected_features.items():
-    X_user_full.at[0, feat] = float(val)
+    if feat in X_user_full.columns:
+        X_user_full.at[0, feat] = float(val)
 X_user = X_user_full.copy()
 
 # Display user inputs
@@ -96,7 +107,7 @@ st.metric("Predicted Class", label)
 
 # Evaluation (if test set exists)
 df = load_data()
-if df is not None:
+if df is not None and "is_fraud" in df.columns:
     X_test = df[feature_names]
     y_test = df["is_fraud"]
     y_pred = model.predict(X_test)
