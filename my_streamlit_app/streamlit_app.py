@@ -2,85 +2,92 @@ import streamlit as st
 import pandas as pd
 import joblib
 from pathlib import Path
-from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from PIL import Image
 
+# Page config
 st.set_page_config(page_title="Fraud Model Explainer", layout="wide")
 
-# -- DEBUG: list model files
-models_dir = Path("models")
-found = list(models_dir.glob("*.pkl")) if models_dir.exists() else []
-st.sidebar.markdown(f"**Model files found:** {', '.join(p.name for p in found) or 'None'}")
+# Resolve directories
+BASE_DIR = Path(__file__).resolve().parent
+MODELS_DIR = BASE_DIR / "models"
+ASSETS_DIR = BASE_DIR / "assets"
 
-# -- Load or fallback model
-@st.cache_resource
-def load_models():
-    md = {}
-    for p in found:
-        try:
-            md[p.stem] = joblib.load(p)
-        except Exception as e:
-            st.sidebar.warning(f"Failed to load {p.name}: {e}")
-    if not md:
-        lr = LogisticRegression()
-        lr.fit([[0]*6, [1]*6], [0, 1])
-        md["Fallback_Model"] = lr
-    return md
+# Debug: list .pkl files in /models
+model_files = list(MODELS_DIR.glob("*.pkl")) if MODELS_DIR.exists() else []
+st.sidebar.markdown(f"**Found model files:** {', '.join(p.name for p in model_files) or 'None'}")
+if not model_files:
+    st.error("No .pkl files found in /models. Add your model files and redeploy.")
+    st.stop()
 
-models_dict = load_models()
-model_name = st.sidebar.selectbox("Choose a model", list(models_dict.keys()))
-model = models_dict[model_name]
+# Load models (skip feature_names.pkl)
+models = {}
+for f in model_files:
+    if f.stem == "feature_names":
+        continue
+    try:
+        models[f.stem] = joblib.load(f)
+    except Exception as e:
+        st.sidebar.warning(f"Failed to load {f.name}: {e}")
+if not models:
+    st.error("No valid models loaded. Check your .pkl files.")
+    st.stop()
 
-# -- Inputs
-features = [
-    "Transaction_Amount", "Account_Balance", "Previous_Fraudulent_Activity",
-    "Daily_Transaction_Count", "Risk_Score", "Is_Weekend"
-]
+# Load feature names
+fn_file = MODELS_DIR / "feature_names.pkl"
+if fn_file.exists():
+    feature_names = joblib.load(fn_file)
+else:
+    st.error("Missing feature_names.pkl in /models")
+    st.stop()
+
+# Sidebar logo
+with st.sidebar:
+    logo_file = ASSETS_DIR / "banner.png"
+    if logo_file.exists():
+        st.image(Image.open(logo_file), width=250)
+    else:
+        st.markdown("### Fraud Model Explainer")
+
+# Model selector
+model_name = st.sidebar.selectbox("Choose a model", list(models.keys()))
+model = models[model_name]
+
+# Input features
 st.sidebar.header("Input Features")
-inputs = {
-    f: float(st.sidebar.number_input(f.replace("_", " "), value=0.0))
-    if f not in ["Previous_Fraudulent_Activity", "Is_Weekend"]
-    else int(st.sidebar.checkbox(f.replace("_", " "), value=False))
-    for f in features
-}
+inputs = {}
+for feat in feature_names:
+    label = feat.replace("_", " ")
+    if feat in ["Previous_Fraudulent_Activity", "Is_Weekend"]:
+        inputs[feat] = int(st.sidebar.checkbox(label, value=0))
+    else:
+        inputs[feat] = float(st.sidebar.number_input(label, value=0.0))
 threshold = st.sidebar.slider("Decision threshold", 0.0, 1.0, 0.5)
 
-# -- Banner
-with st.sidebar:
-    logo = Path("assets/banner.png")
-    if logo.exists(): st.image(Image.open(logo), width=250)
-    else: st.sidebar.markdown("### Fraud Model Explainer")
+# Build user DataFrame
+X_user = pd.DataFrame([inputs], columns=feature_names).fillna(0.0)
 
-# -- Build DataFrame
-X_user = pd.DataFrame([inputs], columns=features).fillna(0.0)
+# Display inputs
 st.subheader("User Inputs")
 st.dataframe(X_user)
 
-# -- Explain
-with st.expander("What is Risk_Score?"):
-    st.write("Precomputed feature from velocity checks, anomalies, rule‐flags, behavior.")
-
-# -- Predict
-proba = model.predict_proba(X_user)[0,1]
+# Prediction
+proba = model.predict_proba(X_user)[0, 1]
 label = "Fraud" if proba >= threshold else "Legit"
 st.subheader("Prediction")
 st.metric("Fraud Probability", f"{proba:.2%}")
 st.metric("Predicted Class", label)
 
-# -- Evaluation (if test_set exists)
-@st.cache_data
-def load_data():
-    fp = Path("models/test_set.csv")
-    return pd.read_csv(fp) if fp.exists() else None
-
-df = load_data()
-if df is not None and "is_fraud" in df.columns:
-    X_test = df[features]
-    y_test = df["is_fraud"]
-    y_pred = model.predict(X_test)
-    st.subheader("Model Evaluation")
-    st.write(f"Accuracy: {accuracy_score(y_test, y_pred):.2%}")
-    st.write(f"Precision: {precision_score(y_test, y_pred):.2%}")
-    st.write(f"Recall: {recall_score(y_test, y_pred):.2%}")
-    st.write(f"F1 Score: {f1_score(y_test, y_pred):.2%}")
+# Model evaluation if test_set.csv exists
+test_file = MODELS_DIR / "test_set.csv"
+if test_file.exists():
+    df = pd.read_csv(test_file)
+    if "is_fraud" in df.columns:
+        X_test = df[feature_names]
+        y_test = df["is_fraud"]
+        y_pred = model.predict(X_test)
+        st.subheader("Model Evaluation")
+        st.write(f"Accuracy: {accuracy_score(y_test, y_pred):.2%}")
+        st.write(f"Precision: {precision_score(y_test, y_pred):.2%}")
+        st.write(f"Recall: {recall_score(y_test, y_pred):.2%}")
+        st.write(f"F1 Score: {f1_score(y_test, y_pred):.2%}")
