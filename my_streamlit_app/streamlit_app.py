@@ -13,7 +13,9 @@ from PIL import Image
 # Page config
 st.set_page_config(page_title="Fraud Model Explainer", layout="wide")
 
-from PIL import Image
+@st.cache_data
+def load_data():
+    return pd.read_csv("models/test_set.csv")
 
 # Sidebar — logo in top-left corner
 with st.sidebar:
@@ -168,4 +170,5 @@ try:
             st.info(" Both models agree on the prediction.")
 
 except Exception as e:
+
     st.warning(f"Evaluation section skipped: {e}")
