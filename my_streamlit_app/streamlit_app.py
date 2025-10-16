@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import joblib
 from pathlib import Path
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from PIL import Image
 
@@ -22,6 +23,11 @@ def load_models(models_dir="models"):
             models[name] = joblib.load(p)
         except:
             st.warning(f"Could not load model: {p.name}")
+    if not models:
+        st.warning("No models found. Using fallback logistic regression.")
+        fallback = LogisticRegression()
+        fallback.fit([[0]*6, [1]*6], [0, 1])  # dummy fit
+        models["Fallback_Model"] = fallback
     return models
 
 with st.sidebar:
@@ -32,15 +38,8 @@ with st.sidebar:
         st.markdown("### Fraud Model Explainer")
 
 models_dict = load_models()
-if not models_dict:
-    st.error("No models found in /models. Please add at least one .pkl file.")
-    st.stop()
-
 model_name = st.sidebar.selectbox("Choose a model", list(models_dict.keys()))
 model = models_dict.get(model_name)
-if model is None:
-    st.error(f"Selected model '{model_name}' not found.")
-    st.stop()
 
 default_features = [
     "Transaction_Amount", "Account_Balance", "Previous_Fraudulent_Activity",
@@ -91,4 +90,3 @@ if df is not None and "is_fraud" in df.columns:
     st.write(f"Precision: {precision_score(y_test, y_pred):.2%}")
     st.write(f"Recall: {recall_score(y_test, y_pred):.2%}")
     st.write(f"F1 Score: {f1_score(y_test, y_pred):.2%}")
-
