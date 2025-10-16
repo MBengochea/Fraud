@@ -3,65 +3,41 @@ import pandas as pd
 import numpy as np
 import joblib
 from pathlib import Path
-from sklearn.metrics import (
-    accuracy_score, precision_score, recall_score, f1_score
-)
-import matplotlib.pyplot as plt
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from PIL import Image
 
-# Page config
 st.set_page_config(page_title="Fraud Model Explainer", layout="wide")
 
-# Load test data
 @st.cache_data
 def load_data():
     path = Path("models/test_set.csv")
-    if path.exists():
-        return pd.read_csv(path)
-    else:
-        st.warning("Test set not found. Skipping evaluation.")
-        return None
+    return pd.read_csv(path) if path.exists() else None
 
-# Load models and feature names
 @st.cache_resource
-def load_models_and_features(models_dir="models"):
+def load_models(models_dir="models"):
     models = {}
     for p in Path(models_dir).glob("*.pkl"):
         name = p.stem
-        if name == "feature_names":
-            continue
-        try:
-            models[name] = joblib.load(p)
-        except FileNotFoundError:
-            st.error(f"Model file not found: {p.name}")
-    feature_path = Path(models_dir) / "feature_names.pkl"
-    if feature_path.exists():
-        feature_names = joblib.load(feature_path)
-    else:
-        st.error("Missing feature_names.pkl in models/")
-        feature_names = []
-    return models, feature_names
+        models[name] = joblib.load(p)
+    return models
 
-# Sidebar — logo
 with st.sidebar:
     logo_path = Path("assets/banner.png")
     if logo_path.exists():
-        logo = Image.open(logo_path)
-        st.image(logo, width=250)
+        st.image(Image.open(logo_path), width=250)
     else:
         st.markdown("### Fraud Model Explainer")
 
-# Load models
-models_dict, feature_names = load_models_and_features()
-if not models_dict or not feature_names:
-    st.stop()
-
-# Sidebar — model selector
-st.sidebar.header("Model Selection")
+models_dict = load_models()
 model_name = st.sidebar.selectbox("Choose a model", list(models_dict.keys()))
 model = models_dict[model_name]
 
-# Sidebar — input features
+# Fallback feature list
+default_features = [
+    "Transaction_Amount", "Account_Balance", "Previous_Fraudulent_Activity",
+    "Daily_Transaction_Count", "Risk_Score", "Is_Weekend"
+]
+
 st.sidebar.header("Input Features")
 selected_features = {
     "Transaction_Amount": st.sidebar.number_input("Transaction Amount", value=0.0),
@@ -71,23 +47,15 @@ selected_features = {
     "Risk_Score": st.sidebar.slider("Risk Score", 0.0, 1.0, 0.5),
     "Is_Weekend": int(st.sidebar.checkbox("Is Weekend"))
 }
-
-# Sidebar — decision threshold
 threshold = st.sidebar.slider("Decision threshold", 0.0, 1.0, 0.5)
 
-# Build input row
-X_user_full = pd.DataFrame(columns=feature_names)
-X_user_full.loc[0] = 0.0
-for feat, val in selected_features.items():
-    if feat in X_user_full.columns:
-        X_user_full.at[0, feat] = float(val)
-X_user = X_user_full.copy()
+X_user = pd.DataFrame([{
+    feat: float(val) for feat, val in selected_features.items()
+}], columns=default_features).fillna(0.0)
 
-# Display user inputs
 st.subheader("User Inputs")
 st.dataframe(X_user[selected_features.keys()])
 
-# Explain Risk_Score
 with st.expander("What is Risk_Score?"):
     st.markdown("""
     **Risk_Score** reflects how suspicious a transaction looks based on:
@@ -97,7 +65,6 @@ with st.expander("What is Risk_Score?"):
     - Historical behavior
     """)
 
-# Run prediction
 proba = model.predict_proba(X_user)[0, 1]
 label = "Fraud" if proba >= threshold else "Legit"
 
@@ -105,17 +72,13 @@ st.subheader("Prediction")
 st.metric("Fraud Probability", f"{proba:.2%}")
 st.metric("Predicted Class", label)
 
-# Evaluation (if test set exists)
 df = load_data()
 if df is not None and "is_fraud" in df.columns:
-    X_test = df[feature_names]
+    X_test = df[default_features]
     y_test = df["is_fraud"]
     y_pred = model.predict(X_test)
-
     st.subheader("Model Evaluation")
     st.write(f"Accuracy: {accuracy_score(y_test, y_pred):.2%}")
     st.write(f"Precision: {precision_score(y_test, y_pred):.2%}")
     st.write(f"Recall: {recall_score(y_test, y_pred):.2%}")
     st.write(f"F1 Score: {f1_score(y_test, y_pred):.2%}")
-
-
