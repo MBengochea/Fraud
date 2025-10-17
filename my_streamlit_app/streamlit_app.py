@@ -57,12 +57,12 @@ model = models_dict[model_name]
 # Sidebar — input features
 st.sidebar.header("Input Features")
 selected_features = {
-    "Transaction_Amount": st.sidebar.number_input("Transaction Amount", value=12.50),
-    "Account_Balance": st.sidebar.number_input("Account Balance", value=150.0),
-    "Previous_Fraudulent_Activity": int(st.sidebar.checkbox("Previous Fraudulent Activity")),
-    "Daily_Transaction_Count": st.sidebar.number_input("Daily Transaction Count", value=1),
-    "Risk_Score": st.sidebar.slider("Risk Score", 0.0, 1.0, 0.92),
-    "Is_Weekend": int(st.sidebar.checkbox("Is Weekend", value=True))
+    "Transaction_Amount": st.sidebar.number_input("Transaction Amount", value=0.0),
+    "Account_Balance": st.sidebar.number_input("Account Balance", value=0.0),
+    "Previous_Fraudulent_Activity": int(st.sidebar.checkbox("Previous Fraudulent Activity", value=False)),
+    "Daily_Transaction_Count": st.sidebar.number_input("Daily Transaction Count", value=0),
+    "Risk_Score": st.sidebar.slider("Risk Score", 0.0, 1.0, 0.0),
+    "Is_Weekend": int(st.sidebar.checkbox("Is Weekend", value=False))
 }
 
 # Sidebar — decision threshold
@@ -209,3 +209,4 @@ if df_test is not None:
             st.warning("Original flags fraud; oversampled does not.")
         else:
             st.info("Both models agree.")
+
