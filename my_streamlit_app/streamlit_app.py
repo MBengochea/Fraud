@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import joblib
 from pathlib import Path
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score,
     confusion_matrix, roc_curve, precision_recall_curve, roc_auc_score
@@ -18,19 +19,17 @@ BASE_DIR   = Path(__file__).resolve().parent
 ASSETS_DIR = BASE_DIR / "assets"
 MODELS_DIR = BASE_DIR / "models"
 
-# Sidebar — logo in top-left corner
+# Sidebar — logo
 with st.sidebar:
     logo_path = ASSETS_DIR / "banner.png"
     if not logo_path.exists():
         st.error("Missing `assets/banner.png` – add it to GitHub and redeploy.")
         st.stop()
-    logo = Image.open(logo_path)
-    st.image(logo, width=250)
+    st.image(Image.open(logo_path), width=250)
 
-# Load models and feature names
+# Load models and features
 @st.cache_resource
 def load_models_and_features():
-    # load .pkl models (skip feature_names)
     models = {}
     for p in MODELS_DIR.glob("*.pkl"):
         if p.stem == "feature_names":
@@ -39,35 +38,29 @@ def load_models_and_features():
     if not models:
         st.error("No model .pkl files found in `models/`. Add them to GitHub and redeploy.")
         st.stop()
-
-    # load feature_names.pkl
     fn = MODELS_DIR / "feature_names.pkl"
     if not fn.exists():
         st.error("Missing `models/feature_names.pkl`. Add it to GitHub and redeploy.")
         st.stop()
     feature_names = joblib.load(fn)
-
     return models, feature_names
 
 models_dict, feature_names = load_models_and_features()
 
-# Sidebar — model selector
+# Sidebar — model and inputs
 st.sidebar.header("Model Selection")
 model_name = st.sidebar.selectbox("Choose a model", list(models_dict.keys()))
 model = models_dict[model_name]
 
-# Sidebar — input features
 st.sidebar.header("Input Features")
 selected_features = {
-    "Transaction_Amount": st.sidebar.number_input("Transaction Amount", value=0.0),
-    "Account_Balance": st.sidebar.number_input("Account Balance", value=0.0),
+    "Transaction_Amount": st.sidebar.number_input("Transaction Amount", value=12.50),
+    "Account_Balance": st.sidebar.number_input("Account Balance", value=150.0),
     "Previous_Fraudulent_Activity": int(st.sidebar.checkbox("Previous Fraudulent Activity")),
-    "Daily_Transaction_Count": st.sidebar.number_input("Daily Transaction Count", value=0),
-    "Risk_Score": st.sidebar.slider("Risk Score", 0.0, 1.0, 0.5),
-    "Is_Weekend": int(st.sidebar.checkbox("Is Weekend"))
+    "Daily_Transaction_Count": st.sidebar.number_input("Daily Transaction Count", value=1),
+    "Risk_Score": st.sidebar.slider("Risk Score", 0.0, 1.0, 0.92),
+    "Is_Weekend": int(st.sidebar.checkbox("Is Weekend", value=True))
 }
-
-# Sidebar — decision threshold
 threshold = st.sidebar.slider("Decision threshold", 0.0, 1.0, 0.5)
 
 # Build input row
@@ -77,7 +70,7 @@ for feat, val in selected_features.items():
     X_user_full.at[0, feat] = float(val)
 X_user = X_user_full.copy()
 
-# Display user inputs
+# Display inputs
 st.subheader("User Inputs")
 st.dataframe(X_user[list(selected_features.keys())])
 
@@ -85,12 +78,10 @@ st.dataframe(X_user[list(selected_features.keys())])
 with st.expander("What is Risk_Score?"):
     st.markdown("""
     **Risk_Score** is a precomputed feature from upstream systems. It reflects how suspicious a transaction looks based on:
-    - Velocity checks (too many transactions)
+    - Velocity checks
     - Device/IP anomalies
     - Rule-based flags
     - Historical behavior
-
-    Values range from `0.0` (low risk) to `1.0` (high risk).
     """)
 
 # Run prediction
@@ -100,32 +91,27 @@ label = "Fraud" if proba >= threshold else "Legit"
 st.subheader("Prediction")
 st.metric("Fraud Probability", f"{proba:.2%}")
 st.metric("Predicted Class", label)
-# Simulate model adaptation with new data
+
+# Adaptation block — retrain on synthetic fraud examples
 with st.expander("Model Adaptation Example"):
     st.markdown("""
-    This model can be retrained on new fraud patterns. Here's a simulation using fresh examples:
+    This simulation retrains the model on 50 synthetic fraud cases based on your input.  
+    It shows how the model can adapt to new patterns.
     """)
 
-    # Create synthetic new data using current inputs
-    new_data = pd.DataFrame([
-        {**selected_features, "Fraud_Label": 1},
-        {**selected_features, "Fraud_Label": 0}
-    ])
-    new_data = new_data.assign(**{k: float(v) for k, v in selected_features.items()})
-    X_new = pd.DataFrame(new_data.drop("Fraud_Label", axis=1), columns=feature_names).fillna(0.0)
-    y_new = new_data["Fraud_Label"]
+    df_fraud = pd.DataFrame([selected_features] * 50)
+    df_fraud["Fraud_Label"] = 1
+    X_new = df_fraud[feature_names]
+    y_new = df_fraud["Fraud_Label"]
 
-    # Retrain a temporary model
-    from sklearn.linear_model import LogisticRegression
-    adaptive_model = LogisticRegression()
-    adaptive_model.fit(X_new, y_new)
+    adapted_model = LogisticRegression()
+    adapted_model.fit(X_new, y_new)
 
-    # Predict again using retrained model
-    new_proba = adaptive_model.predict_proba(X_user)[0, 1]
+    new_proba = adapted_model.predict_proba(X_user)[0, 1]
     new_label = "Fraud" if new_proba >= threshold else "Legit"
 
-    st.write(f"**Updated Prediction:** {new_label} ({new_proba:.2%})")
-    st.caption("Retrained on 2 synthetic examples. Real deployments use thousands.")
+    st.write(f"**Adapted Model Prediction:** {new_label} ({new_proba:.2%})")
+    st.caption("Retrained on 50 synthetic fraud examples. Real deployments use thousands.")
 
 # Load test set
 @st.cache_data
@@ -143,7 +129,6 @@ if df_test is not None:
     probs = model.predict_proba(X_test)[:, 1]
     y_pred = (probs >= threshold).astype(int)
 
-    # Metrics table
     st.subheader("Model Performance on Test Set")
     metrics = {
         "Accuracy": accuracy_score(y_test, y_pred),
@@ -153,7 +138,6 @@ if df_test is not None:
     }
     st.table(pd.DataFrame(metrics, index=["Score"]).T)
 
-    # Confusion matrix
     st.subheader("Confusion Matrix")
     cm = confusion_matrix(y_test, y_pred)
     fig_cm, ax_cm = plt.subplots(figsize=(2, 2))
@@ -165,7 +149,6 @@ if df_test is not None:
         ax_cm.text(j, i, str(val), ha="center", va="center", fontsize=6)
     st.pyplot(fig_cm)
 
-    # ROC & PR curves
     fpr, tpr, _ = roc_curve(y_test, probs)
     precision, recall, _ = precision_recall_curve(y_test, probs)
     auc_score = roc_auc_score(y_test, probs)
@@ -187,13 +170,11 @@ if df_test is not None:
         ax_pr.set_xlabel("Recall"); ax_pr.set_ylabel("Precision")
         st.pyplot(fig_pr)
 
-    # Real fraud examples
     st.subheader("Real Fraud Examples")
     cols_to_show = list(selected_features.keys()) + ["Fraud_Label"]
     fraud_cases = df_test[df_test["Fraud_Label"] == 1].head(5)
     st.dataframe(fraud_cases[cols_to_show])
 
-    # Model comparison
     if {"LogisticOversampled", "LogisticRegression"}.issubset(models_dict):
         st.subheader("Model Comparison")
         o = models_dict["LogisticOversampled"].predict_proba(X_user)[0, 1]
@@ -206,4 +187,6 @@ if df_test is not None:
             st.warning("Original flags fraud; oversampled does not.")
         else:
             st.info("Both models agree.")
+
+
 
