@@ -100,6 +100,32 @@ label = "Fraud" if proba >= threshold else "Legit"
 st.subheader("Prediction")
 st.metric("Fraud Probability", f"{proba:.2%}")
 st.metric("Predicted Class", label)
+# Simulate model adaptation with new data
+with st.expander("Model Adaptation Example"):
+    st.markdown("""
+    This model can be retrained on new fraud patterns. Here's a simulation using fresh examples:
+    """)
+
+    # Create synthetic new data using current inputs
+    new_data = pd.DataFrame([
+        {**selected_features, "Fraud_Label": 1},
+        {**selected_features, "Fraud_Label": 0}
+    ])
+    new_data = new_data.assign(**{k: float(v) for k, v in selected_features.items()})
+    X_new = pd.DataFrame(new_data.drop("Fraud_Label", axis=1), columns=feature_names).fillna(0.0)
+    y_new = new_data["Fraud_Label"]
+
+    # Retrain a temporary model
+    from sklearn.linear_model import LogisticRegression
+    adaptive_model = LogisticRegression()
+    adaptive_model.fit(X_new, y_new)
+
+    # Predict again using retrained model
+    new_proba = adaptive_model.predict_proba(X_user)[0, 1]
+    new_label = "Fraud" if new_proba >= threshold else "Legit"
+
+    st.write(f"**Updated Prediction:** {new_label} ({new_proba:.2%})")
+    st.caption("Retrained on 2 synthetic examples. Real deployments use thousands.")
 
 # Load test set
 @st.cache_data
@@ -180,3 +206,4 @@ if df_test is not None:
             st.warning("Original flags fraud; oversampled does not.")
         else:
             st.info("Both models agree.")
+
