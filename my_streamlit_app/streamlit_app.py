@@ -106,9 +106,11 @@ with st.expander("Model Adaptation Example"):
     df_fraud = pd.concat([X_user] * 50, ignore_index=True)
     df_fraud["Fraud_Label"] = 1
 
-    # 50 synthetic legit cases
+    # 50 synthetic legit cases with lower risk
     df_legit = pd.concat([X_user] * 50, ignore_index=True)
     df_legit["Fraud_Label"] = 0
+    if "Risk_Score" in df_legit.columns:
+        df_legit["Risk_Score"] = df_legit["Risk_Score"] * 0.5
 
     # Combine into adaptation set
     df_adapt = pd.concat([df_fraud, df_legit], ignore_index=True)
@@ -124,6 +126,8 @@ with st.expander("Model Adaptation Example"):
     new_label = "Fraud" if new_proba >= threshold else "Legit"
 
     st.write(f"**Adapted Model Prediction:** {new_label} ({new_proba:.2%})")
+    st.write(f"Original: {proba:.2%} → Adapted: {new_proba:.2%}")
+    st.write(f"Original Class: {'Fraud' if proba >= threshold else 'Legit'} → Adapted Class: {'Fraud' if new_proba >= threshold else 'Legit'}")
     st.caption("Retrained on 100 synthetic examples. Real deployments use thousands.")
 
 # Load test set and evaluate
